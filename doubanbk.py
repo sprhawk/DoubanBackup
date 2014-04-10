@@ -12,6 +12,15 @@ import sqlite3 as sq
 
 from keys import API_KEY, SECRET, REDIRECT_URI
 
+# 由dex2jar + JD-GUI 从 com.douban.group.apk文件中获取
+DB_ANDROID_GROUP_APP_API_KEY = "00a0951fbec80b0501e1bf5f3c58210f"
+DB_ANDROID_GROUP_APP_SECRET = "77faec137e9bda16"
+DB_ANDROID_GROUP_APP_REDIRECT_URI = "http://group.douban.com/!service/android"
+
+API_KEY = DB_ANDROID_GROUP_APP_API_KEY
+SECRET = DB_ANDROID_GROUP_APP_SECRET
+REDIRECT_URI = DB_ANDROID_GROUP_APP_REDIRECT_URI
+
 SQLITE_DB = "doubanbak.db"
 
 sqlite_conn = None
@@ -146,6 +155,7 @@ def get(url, parameters, token=None):
     req = Request(url)
     if token is not None:
         req.add_header("Authorization", "Bearer " + token) 
+    req.add_header("User-Agent", "api-client/2.0 com.douban.group/2.22(222) Android/18 Group Douban x86")
     resp = urllib.request.urlopen(req)
     return resp
 
@@ -210,6 +220,13 @@ def retrieve_all_shuo():
         start += 200
         count = retrieve_my_timeline(start, 200) 
 
+def retrieve_group_my_topics():
+    token = db_settings_get("access_token")
+    parameters = {"start": 0,
+                  "count": 1}
+    resp = get("https://api.douban.com/v2/group/my_topics", parameters, token)
+    print(resp.read().decode('utf-8'))
+
 if __name__ == "__main__":
     print("test")
 
@@ -217,7 +234,7 @@ if __name__ == "__main__":
     if command == "auth":
         scope = """douban_basic_common,movie_basic,movie_basic_r,travel_basic_r,community_basic_note,community_basic_user,community_basic_photo,community_basic_online,book_basic_r,music_basic_r,music_artist_r,shuo_basic_r,event_basic_r,event_drama_r"""
 
-        auth(API_KEY, REDIRECT_URI, "code", scope)
+        auth(API_KEY, REDIRECT_URI, "code", None)
     elif command == "token":
         if len(sys.argv) >=3 :
             code = sys.argv[2]
@@ -235,6 +252,8 @@ if __name__ == "__main__":
             subcommand = sys.argv[2]
             if subcommand == "shuo":
                 retrieve_all_shuo()
+            elif subcommand == "group":
+                retrieve_group_my_topics()
             else:
                 print("not support " + subcommand)
         else:
