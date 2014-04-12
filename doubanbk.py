@@ -41,7 +41,46 @@ def initdb():
                  reshared_count integer, like_count integer, comments_count integer, can_reply integer, liked integer, created_at text, reshared_status text, fts_docid integer);""")
     c.execute("""create virtual table if not exists shuo_fts USING fts4(title, text)""")
     c.execute("create table if not exists douban_user (user_id text, user_uid text, name text, small_avatar text, large_avatar text, description);")
+    c.execute("create table if not exists group_topics (id text, title text, content text, author_json text, group_json text, updated text, created text);")
+    c.execute("create table if not exists group_topic_comments(id text, topic_id text, content text, author_json text, time text);")
     db.commit()
+
+def insert_group_topic(topic):
+    db = sqlitedb()
+    c = db.cursor()
+
+    topicid = topic["id"]
+    title = topic["title"]
+    content = topic["content"]
+    author = json.dumps(topic["author"])
+    group = json.dumps(topic["group"])
+    updated = topic["updated"]
+    created = topic["created"]
+
+    c.execute("select count() from group_topics where id = ?;", (topicid, ))
+    row = c.fetchone()
+    if 0 == row[0]:
+        p = (topicid, title, content, author, group, updated, created)
+        c.execute("insert into group_topics (id, title, content, author_json, group_json, updated, created) values(?, ?, ?, ?, ?, ?, ?)", p)
+        print("inserted topic(" + title + ")")
+        db.commit()
+    
+def insert_group_topic_comment(topic_id, comment):
+    db = sqlitedb()
+    c = db.cursor()
+
+    cid = comment["id"]
+    time = comment["time"]
+    content = comment["text"]
+    author = json.dumps(comment["author"])
+
+    c.execute("select count() from group_topic_comments where id = ?;", (cid, ))
+    row = c.fetchone()
+    if 0 == row[0]:
+        p = (topic_id, cid, time, content, author)
+        c.execute("insert into group_topic_comments (topic_id, id, content, author_json, time) values(?, ?, ?, ?, ?);", p)
+        print("inserted comment(" +  content + ")")
+        db.commit()
 
 def insert_shuo(shuo):
     db = sqlitedb()
@@ -227,6 +266,33 @@ def retrieve_group_my_topics():
     resp = get("https://api.douban.com/v2/group/my_topics", parameters, token)
     print(resp.read().decode('utf-8'))
 
+def retrieve_group_topic(topic):
+    token = db_settings_get("access_token")
+    # resp = get("https://api.douban.com/v2/group/topic/" + topic + "/", None, token)
+    # # print(json.loads(resp.read().decode('utf-8')))
+    # topic = json.loads(resp.read().decode('utf-8'))
+    # insert_group_topic(topic)
+
+    start = 0
+    count = 200
+    total = 0
+    while (True):
+        p = {"start": start,
+                      "count": count}
+        resp = get("https://api.douban.com/v2/group/topic/" + topic + "/comments", p, token)
+        text = resp.read().decode('utf-8')
+        r = json.loads(text)
+        t = r["total"]
+        c = r["count"]
+        s = r["start"]
+        comments = r["comments"]
+        # print(json.dumps(json.loads(text), indent=4))
+        for comment in comments:
+            insert_group_topic_comment(topic, comment)
+        if s + c >= t :
+            break
+        start = s + c
+
 if __name__ == "__main__":
     print("test")
 
@@ -254,6 +320,13 @@ if __name__ == "__main__":
                 retrieve_all_shuo()
             elif subcommand == "group":
                 retrieve_group_my_topics()
+            elif subcommand == "topic":
+                if len(sys.argv) >= 4:
+                    topic = sys.argv[3]
+                    if topic is not None:
+                        retrieve_group_topic(topic)
+                    else:
+                        print("get topic topic_id")
             else:
                 print("not support " + subcommand)
         else:
